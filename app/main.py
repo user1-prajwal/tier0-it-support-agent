@@ -4,7 +4,7 @@ from app.api.health import router as health_router
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Tier0 - Permission-Aware IT Support Agent (demo)")
+    app = FastAPI(title="Tier0 - Permission-Aware IT Support Agent")
     app.include_router(health_router)
     return app
 

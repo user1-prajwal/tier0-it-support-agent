@@ -15,5 +15,16 @@ services:
       timeout: 3s
       retries: 10
 
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://tier0:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/tier0
+      LLM_PROVIDER: ${LLM_PROVIDER:-fake}
+    ports:
+      - "127.0.0.1:8000:8000"
+
 volumes:
   pgdata:

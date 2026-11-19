@@ -1,6 +1,7 @@
 import pytest
-from app.config import Settings
 from pydantic import ValidationError
+
+from app.config import Settings
 
 DB_URL = "postgresql+psycopg://tier0:s3cret-pw@localhost:5432/tier0"
 

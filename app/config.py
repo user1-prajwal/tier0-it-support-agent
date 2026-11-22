@@ -14,3 +14,7 @@ class Settings(BaseSettings):
 
     # "fake" means no external calls, so forgetting to configure is the safe case.
     llm_provider: Literal["groq", "gemini", "ollama", "openrouter", "fake"] = "fake"
+    
+    # Local embedding model. Downloaded once, then reused offline from the cache folder.
+    embed_model: str = "BAAI/bge-small-en-v1.5"
+    embed_cache_dir: str = ".cache/fastembed"

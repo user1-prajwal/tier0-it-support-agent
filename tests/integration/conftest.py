@@ -50,3 +50,10 @@ def engine():
         os.environ.pop("DATABASE_URL", None)
     else:
         os.environ["DATABASE_URL"] = previous
+        
+        
+@pytest.fixture
+def clean_db(engine):
+    """Empty the document tables before a test that writes rows (test database only)."""
+    with engine.begin() as conn:
+        conn.execute(text("TRUNCATE documents RESTART IDENTITY CASCADE"))

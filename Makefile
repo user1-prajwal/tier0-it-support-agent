@@ -18,6 +18,9 @@ test-unit:
 test:
 	LLM_PROVIDER=fake pytest
 
+ingest:
+	python -m app.ingest.cli corpus
+
 
 
 # .PHONY: up down lint test

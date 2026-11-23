@@ -11,6 +11,8 @@ import re
 from typing import Protocol
 
 DIMENSIONS = 384  # bge-small-en-v1.5 and HashEmbedder share this, so one column fits both
+# The query instruction from the BGE model card. Off by default: Step 7 measures it.
+BGE_QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
 
 _WORD = re.compile(r"[a-z0-9]+")
 

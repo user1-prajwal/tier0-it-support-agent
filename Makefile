@@ -21,6 +21,8 @@ test:
 ingest:
 	python -m app.ingest.cli corpus
 
+eval:
+	python -m eval.run_eval $(ARGS)
 
 
 # .PHONY: up down lint test

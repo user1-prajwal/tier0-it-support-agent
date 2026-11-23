@@ -13,7 +13,7 @@ from app.db.vector import to_pgvector
 
 DENSE_SQL = text(
     """
-    SELECT c.id AS chunk_id, c.document_id, d.title, c.heading_path, c.text,
+    SELECT c.id AS chunk_id, c.document_id, d.title, d.source_uri, c.heading_path, c.text,
            c.embedding <=> CAST(:qvec AS vector) AS distance
     FROM chunks c
     JOIN documents d ON d.id = c.document_id
@@ -34,6 +34,7 @@ class Hit:
     chunk_id: int
     document_id: int
     title: str
+    source_uri: str
     heading_path: str
     text: str
     distance: float  # cosine distance: 0 is identical, smaller is closer

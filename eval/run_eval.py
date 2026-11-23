@@ -13,7 +13,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from sqlalchemy import text
+from sqlalchemy import Engine, text
 
 from app.config import Settings
 from app.db.groups import group_ids_by_name
@@ -33,6 +33,17 @@ SECTIONS_SQL = text(
     WHERE d.status = 'active'
     """
 )
+READABLE_SQL = text(
+    """
+    SELECT DISTINCT d.source_uri, c.heading_path
+    FROM chunks c JOIN documents d ON d.id = c.document_id
+    WHERE d.status = 'active'
+      AND EXISTS (
+          SELECT 1 FROM document_acl a
+          WHERE a.document_id = d.id AND a.group_id = ANY(CAST(:group_ids AS bigint[]))
+      )
+    """
+)
 RECORD_SQL = text(
     """
     INSERT INTO eval_runs (git_commit, split, n_questions, config, metrics)
@@ -45,6 +56,19 @@ RECORD_SQL = text(
 def git(*args: str) -> str:
     return subprocess.run(["git", *args], capture_output=True, text=True, check=True).stdout.strip()
 
+
+def unreachable_gold(engine: Engine, questions) -> list:
+    """Gold labels the asking user may not read: such a question can never be found."""
+    readable: dict[str, set[tuple[str, str]]] = {}
+    problems = []
+    for q in questions:
+        if q.asked_by not in readable:
+            group_ids = group_ids_by_name(engine, SEEDED_USERS[q.asked_by])
+            with engine.connect() as conn:
+                rows = conn.execute(READABLE_SQL, {"group_ids": group_ids}).all()
+            readable[q.asked_by] = {(r.source_uri, r.heading_path) for r in rows}
+        problems += [(q.id, q.asked_by, g) for g in q.gold if g not in readable[q.asked_by]]
+    return problems
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Evaluate retrieval on the dev split.")
@@ -65,6 +89,12 @@ def main(argv: list[str] | None = None) -> int:
         print("These gold labels match no ingested section (a typo, or run `make ingest`):")
         for question_id, (uri, heading) in bad:
             print(f"  {question_id}: {uri} | {heading}")
+        return 1
+    unreachable = unreachable_gold(engine, questions)
+    if unreachable:
+        print("These questions can never be answered by the user who asks them (no read access):")
+        for question_id, asker, (uri, heading) in unreachable:
+            print(f"  {question_id}: {asker} cannot read {uri} | {heading}")
         return 1
     if models != {settings.embed_model}:
         print(

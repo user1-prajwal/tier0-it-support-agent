@@ -1,4 +1,4 @@
-.PHONY: up down migrate lint test test-unit
+.PHONY: up down migrate lint test test-unit ingest eval
 
 up:
 	docker compose up -d --build --wait

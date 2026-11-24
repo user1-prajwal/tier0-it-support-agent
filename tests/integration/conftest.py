@@ -9,6 +9,8 @@ from sqlalchemy.engine import URL, make_url
 
 from app.config import Settings
 from app.db.session import get_engine
+from app.ingest.pipeline import ingest_file
+from app.retrieval.embedder import HashEmbedder
 
 ALEMBIC_INI = Path(__file__).resolve().parents[2] / "alembic.ini"
 TEST_DB_NAME = "tier0_test"
@@ -57,3 +59,33 @@ def clean_db(engine):
     """Empty the document tables before a test that writes rows (test database only)."""
     with engine.begin() as conn:
         conn.execute(text("TRUNCATE documents RESTART IDENTITY CASCADE"))
+        
+
+DOC_TEMPLATE = """\
++++
+title = "{title}"
+classification = "{classification}"
+synthetic = true
++++
+# Topic
+## Section
+{body}
+"""
+
+
+@pytest.fixture
+def add_document(engine, clean_db, tmp_path):
+    """Ingest a one-section test document (with the test embedder)."""
+
+    def add(name: str, title: str, classification: str, body: str) -> None:
+        path = tmp_path / name
+        path.write_text(
+            DOC_TEMPLATE.format(
+                title=title,
+                classification=classification,
+                body=body,
+            )
+        )
+        ingest_file(engine, path, tmp_path, HashEmbedder())
+
+    return add

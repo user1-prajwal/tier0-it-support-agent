@@ -73,6 +73,7 @@ def unreachable_gold(engine: Engine, questions) -> list:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Evaluate retrieval on the dev split.")
     parser.add_argument("--prefix", choices=["none", "bge"], default="none")
+    parser.add_argument("--no-record", action="store_true", help="print metrics, write no row")
     args = parser.parse_args(argv)
 
     questions = load_questions(QUESTIONS_FILE)
@@ -120,23 +121,64 @@ def main(argv: list[str] | None = None) -> int:
         hits = dense_search(engine, embedder.embed_query(q.question), group_ids, limit=RETRIEVED)
         ranks.append(first_gold_rank([(h.source_uri, h.heading_path) for h in hits], list(q.gold)))
 
+    # n = len(scored)
+    # found5 = sum(1 for r in ranks if r is not None and r <= 5)
+    # found10 = sum(1 for r in ranks if r is not None and r <= 10)
+    # metrics = {
+    #     "n": n,
+    #     "recall_at_5": round(recall_at_k(ranks, 5), 4),
+    #     "recall_at_10": round(recall_at_k(ranks, 10), 4),
+    #     "mrr": round(mean_reciprocal_rank(ranks), 4),
+    # }
+
+    # print(f"dense search | query prefix: {args.prefix} | split: dev | n = {n}")
+    # print(f"  Recall@5  = {metrics['recall_at_5']:.3f}  ({found5} of {n} questions)")
+    # print(f"  Recall@10 = {metrics['recall_at_10']:.3f}  ({found10} of {n} questions)")
+    # print(f"  MRR       = {metrics['mrr']:.3f}")
+    # for q, rank in zip(scored, ranks, strict=True):
+    #     if rank is None or rank > 5:
+    #         print(f"  not in top 5: {q.id} (first gold chunk: {rank or 'not in top 10'})")
+    
     n = len(scored)
     found5 = sum(1 for r in ranks if r is not None and r <= 5)
     found10 = sum(1 for r in ranks if r is not None and r <= 10)
+
+    by_category: dict[str, list[int | None]] = {}
+    for q, rank in zip(scored, ranks, strict=True):
+        by_category.setdefault(q.category, []).append(rank)
+
     metrics = {
         "n": n,
         "recall_at_5": round(recall_at_k(ranks, 5), 4),
         "recall_at_10": round(recall_at_k(ranks, 10), 4),
         "mrr": round(mean_reciprocal_rank(ranks), 4),
+        "by_category": {
+            category: {
+                "n": len(cat_ranks),
+                "recall_at_5": round(recall_at_k(cat_ranks, 5), 4),
+                "mrr": round(mean_reciprocal_rank(cat_ranks), 4),
+            }
+            for category, cat_ranks in sorted(by_category.items())
+        },
     }
 
     print(f"dense search | query prefix: {args.prefix} | split: dev | n = {n}")
     print(f"  Recall@5  = {metrics['recall_at_5']:.3f}  ({found5} of {n} questions)")
     print(f"  Recall@10 = {metrics['recall_at_10']:.3f}  ({found10} of {n} questions)")
     print(f"  MRR       = {metrics['mrr']:.3f}")
+    for category, stats in metrics["by_category"].items():
+        print(
+            f"  {category:<16} n={stats['n']:<3} "
+            f"Recall@5={stats['recall_at_5']:.2f}  "
+            f"MRR={stats['mrr']:.2f}"
+        )
     for q, rank in zip(scored, ranks, strict=True):
-        if rank is None or rank > 5:
-            print(f"  not in top 5: {q.id} (first gold chunk: {rank or 'not in top 10'})")
+        if rank != 1:
+            print(f"  not ranked first: {q.id} ({q.category}) -> rank {rank or 'beyond 10'}")
+
+    if args.no_record:
+        print("not recorded (--no-record)")
+        return 0
 
     commit, dirty = git("rev-parse", "HEAD"), bool(git("status", "--porcelain"))
     if dirty:

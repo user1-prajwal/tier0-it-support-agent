@@ -4,9 +4,12 @@ Python, FastAPI, PostgreSQL with pgvector, Docker, GitHub Actions
 
 ![CI](https://github.com/user1-prajwal/tier0-it-support-agent/actions/workflows/ci.yml/badge.svg)
 
-**Status: Phase 0 (project skeleton).** The repository currently contains the build
-foundation only: configuration, a database with pgvector, migrations, health endpoints,
-a Docker image and CI. There is no retrieval, permission model, agent or LLM yet.
+**Status: Phase 1 (ingestion and dense retrieval) complete.** The repository can ingest a small
+synthetic corpus with per-document access levels, search it with a permission filter applied
+inside the SQL query, and evaluate retrieval on a hand-labelled dev set. There is no
+full-text search, reranking, login, LLM answering or agent yet. A baseline is recorded in
+`docs/decisions/0001-phase-1.md`. The dev set is small and easy, so those numbers are a
+starting point and not a claim about quality.
 
 ## Goal
 
@@ -32,6 +35,8 @@ cp .env.example .env
 sed -i "s/change-me/$(openssl rand -hex 16)/g" .env
 make up
 make migrate
+make ingest   # downloads the embedding model on first run
+make eval ARGS="--no-record"
 make test
 ```
 
@@ -45,4 +50,5 @@ Then open http://localhost:8000/health and http://localhost:8000/health/ready.
 
 ## Decisions
 
-Design decisions are recorded in `docs/decisions/`.
+- Design decisions are recorded in `docs/decisions/`.
+- Evaluation so far is dense search only, on a small synthetic corpus labelled by the author.

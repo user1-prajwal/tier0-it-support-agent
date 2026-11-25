@@ -4,7 +4,6 @@ Filtering and ranking happen in one query. A chunk the caller's groups may not r
 reaches ranking, reranking or any prompt. Never filter the results afterwards.
 """
 
-import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -52,28 +51,25 @@ def dense_search(
 
 # --- Full-text search -----------------------------------------------------------------
 
-_TERM = re.compile(r"[a-z0-9]+")
-MAX_TERMS = 32
-MAX_TERM_LENGTH = 64
-
-
-def build_or_query(text_: str) -> str | None:
-    """Convert a question into a safe PostgreSQL full-text search query."""
-
-    terms = [t for t in _TERM.findall(text_.lower()) if len(t) <= MAX_TERM_LENGTH]
-    unique = list(dict.fromkeys(terms))[:MAX_TERMS]
-
-    return " | ".join(unique) or None
-
-
+# plainto_tsquery tokenizes the question with the same parser that built the index (so codes,
+# hostnames and emails match) and ignores any query operators in the text. It joins terms
+# with AND, so the text form of its result is rewritten with OR. The question is only ever a
+# bound parameter and is never pasted into SQL.
 FULLTEXT_SQL = text(
     """
+    WITH q AS (
+        SELECT CAST(
+                   replace(
+                       CAST(plainto_tsquery('english', CAST(:question AS text)) AS text),
+                       ' & ', ' | '
+                   ) AS tsquery
+               ) AS tsq
+    )
     SELECT c.id AS chunk_id, c.document_id, d.title, d.source_uri, c.heading_path, c.text,
-           ts_rank_cd(c.tsv, q) AS score
-    FROM chunks c
-    JOIN documents d ON d.id = c.document_id,
-         to_tsquery('english', :or_query) q
-    WHERE c.tsv @@ q
+           ts_rank_cd(c.tsv, q.tsq) AS score
+    FROM q, chunks c
+    JOIN documents d ON d.id = c.document_id
+    WHERE c.tsv @@ q.tsq
       AND d.status = 'active'
       AND EXISTS (
           SELECT 1 FROM document_acl a
@@ -94,24 +90,18 @@ class FullTextHit:
     source_uri: str
     heading_path: str
     text: str
-    score: float
+    score: float  # ts_rank_cd: larger is better. Not comparable with a dense distance
 
 
 def fulltext_search(
     engine: Engine, question: str, group_ids: Sequence[int], limit: int = 30
 ) -> list[FullTextHit]:
-    or_query = build_or_query(question)
-
-    if or_query is None:
-        return []
-
     params = {
-        "or_query": or_query,
+        # A NUL byte cannot be sent to Postgres as text and would raise, so treat it as a space.
+        "question": question.replace("\x00", " "),
         "group_ids": list(group_ids),
         "limit": limit,
     }
-
     with engine.connect() as conn:
         rows = conn.execute(FULLTEXT_SQL, params).all()
-
     return [FullTextHit(**row._mapping) for row in rows]

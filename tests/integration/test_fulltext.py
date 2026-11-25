@@ -49,14 +49,22 @@ def test_a_retired_version_is_never_returned(engine, add_document):
 
 
 def test_an_exact_error_code_ranks_its_own_chunk_first(engine, add_document):
-    add_document("e809.md", "VPN error 809", "internal",
-                 "Error VPN-809 means the tunnel handshake failed. Check the certificate date.")
+    # The decoy is inserted FIRST: with a tie, the tie-break would put it ahead.
     add_document("e404.md", "VPN error 404", "internal",
                  "Error VPN-404 means the gateway is unreachable. Check the network cable.")
+    add_document("e809.md", "VPN error 809", "internal",
+                 "Error VPN-809 means the tunnel handshake failed. Check the certificate date.")
 
     hits = fulltext_search(engine, "VPN-809", group_ids_by_name(engine, ["everyone"]))
     assert hits[0].title == "VPN error 809"
 
+
+def test_a_hostname_is_found_by_its_exact_name(engine, add_document):
+    add_document("hosts.md", "VPN hosts", "internal", "Connect to vpn.demo.local on port 443.")
+    add_document("other.md", "Local demo", "internal", "A local demo of the VPN client.")
+
+    hits = fulltext_search(engine, "vpn.demo.local", group_ids_by_name(engine, ["everyone"]))
+    assert "VPN hosts" in {h.title for h in hits}
 
 def test_hostile_questions_are_harmless(engine, add_document):
     add_document("vpn.md", "VPN guide", "internal", "Restart the VPN client.")
@@ -67,6 +75,7 @@ def test_hostile_questions_are_harmless(engine, add_document):
         "vpn' & !(a | b) <-> c:* ",
         "((((",
         "!!! ??? ...",
+        "vpn \x00 vpn",
         "a" * 5000,
     ]:
         fulltext_search(engine, question, everyone, limit=100)  # must not raise

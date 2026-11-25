@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from sqlalchemy import Engine, text
 
 from app.db.vector import to_pgvector
+from app.retrieval.embedder import Embedder
+from app.retrieval.fusion import reciprocal_rank_fusion
 
 DENSE_SQL = text(
     """
@@ -105,3 +107,55 @@ def fulltext_search(
     with engine.connect() as conn:
         rows = conn.execute(FULLTEXT_SQL, params).all()
     return [FullTextHit(**row._mapping) for row in rows]
+
+# --- Hybrid search --------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class FusedHit:
+    chunk_id: int
+    document_id: int
+    title: str
+    source_uri: str
+    heading_path: str
+    text: str
+    score: float  # the RRF score
+    dense_rank: int | None  # position in the dense list, None if that arm did not return it
+    fulltext_rank: int | None  # position in the full-text list, None if absent
+
+
+def hybrid_search(
+    engine: Engine,
+    embedder: Embedder,
+    question: str,
+    group_ids: Sequence[int],
+    *,
+    per_arm: int = 30,
+    limit: int = 20,
+) -> list[FusedHit]:
+    """Both arms apply the permission filter in their own SQL. Fusion only merges what they
+    returned: it loads nothing by chunk id and so cannot add a chunk the user may not read."""
+    dense = dense_search(engine, embedder.embed_query(question), group_ids, limit=per_arm)
+    fulltext = fulltext_search(engine, question, group_ids, limit=per_arm)
+
+    rows = {hit.chunk_id: hit for hit in [*dense, *fulltext]}
+    dense_rank = {hit.chunk_id: rank for rank, hit in enumerate(dense, start=1)}
+    fulltext_rank = {hit.chunk_id: rank for rank, hit in enumerate(fulltext, start=1)}
+    fused = reciprocal_rank_fusion(
+        [[hit.chunk_id for hit in dense], [hit.chunk_id for hit in fulltext]]
+    )
+
+    return [
+        FusedHit(
+            chunk_id=chunk_id,
+            document_id=rows[chunk_id].document_id,
+            title=rows[chunk_id].title,
+            source_uri=rows[chunk_id].source_uri,
+            heading_path=rows[chunk_id].heading_path,
+            text=rows[chunk_id].text,
+            score=score,
+            dense_rank=dense_rank.get(chunk_id),
+            fulltext_rank=fulltext_rank.get(chunk_id),
+        )
+        for chunk_id, score in fused[:limit]
+    ]

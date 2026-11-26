@@ -24,6 +24,9 @@ ingest:
 eval:
 	python -m eval.run_eval $(ARGS)
 
+seed:
+	python -m app.db.seed
+
 
 # .PHONY: up down lint test
 

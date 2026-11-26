@@ -16,11 +16,11 @@ from pathlib import Path
 from sqlalchemy import Engine, text
 
 from app.config import Settings
-from app.db.groups import group_ids_by_name
 from app.db.session import get_engine
+from app.db.users import get_user_by_email
 from app.retrieval.embedder import BGE_QUERY_PREFIX, FastEmbedEmbedder
 from app.retrieval.search import dense_search
-from eval.dataset import SEEDED_USERS, load_questions, missing_gold, split_of
+from eval.dataset import load_questions, missing_gold, split_of
 from eval.metrics import first_gold_rank, mean_reciprocal_rank, recall_at_k
 
 QUESTIONS_FILE = Path("eval/questions/questions.jsonl")
@@ -57,18 +57,27 @@ def git(*args: str) -> str:
     return subprocess.run(["git", *args], capture_output=True, text=True, check=True).stdout.strip()
 
 
+def group_ids_of(engine: Engine, email: str) -> list[int]:
+    """Group ids for an active seeded user, read from the database on every call."""
+    user = get_user_by_email(engine, email)
+    if user is None or not user.is_active:
+        raise SystemExit(f"{email} is not an active user in the database. Run `make seed`.")
+    return list(user.group_ids)
+
+
 def unreachable_gold(engine: Engine, questions) -> list:
     """Gold labels the asking user may not read: such a question can never be found."""
     readable: dict[str, set[tuple[str, str]]] = {}
     problems = []
     for q in questions:
         if q.asked_by not in readable:
-            group_ids = group_ids_by_name(engine, SEEDED_USERS[q.asked_by])
+            group_ids = group_ids_of(engine, q.asked_by)
             with engine.connect() as conn:
                 rows = conn.execute(READABLE_SQL, {"group_ids": group_ids}).all()
             readable[q.asked_by] = {(r.source_uri, r.heading_path) for r in rows}
         problems += [(q.id, q.asked_by, g) for g in q.gold if g not in readable[q.asked_by]]
     return problems
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Evaluate retrieval on the dev split.")
@@ -117,28 +126,10 @@ def main(argv: list[str] | None = None) -> int:
 
     ranks: list[int | None] = []
     for q in scored:
-        group_ids = group_ids_by_name(engine, SEEDED_USERS[q.asked_by])
+        group_ids = group_ids_of(engine, q.asked_by)
         hits = dense_search(engine, embedder.embed_query(q.question), group_ids, limit=RETRIEVED)
         ranks.append(first_gold_rank([(h.source_uri, h.heading_path) for h in hits], list(q.gold)))
 
-    # n = len(scored)
-    # found5 = sum(1 for r in ranks if r is not None and r <= 5)
-    # found10 = sum(1 for r in ranks if r is not None and r <= 10)
-    # metrics = {
-    #     "n": n,
-    #     "recall_at_5": round(recall_at_k(ranks, 5), 4),
-    #     "recall_at_10": round(recall_at_k(ranks, 10), 4),
-    #     "mrr": round(mean_reciprocal_rank(ranks), 4),
-    # }
-
-    # print(f"dense search | query prefix: {args.prefix} | split: dev | n = {n}")
-    # print(f"  Recall@5  = {metrics['recall_at_5']:.3f}  ({found5} of {n} questions)")
-    # print(f"  Recall@10 = {metrics['recall_at_10']:.3f}  ({found10} of {n} questions)")
-    # print(f"  MRR       = {metrics['mrr']:.3f}")
-    # for q, rank in zip(scored, ranks, strict=True):
-    #     if rank is None or rank > 5:
-    #         print(f"  not in top 5: {q.id} (first gold chunk: {rank or 'not in top 10'})")
-    
     n = len(scored)
     found5 = sum(1 for r in ranks if r is not None and r <= 5)
     found10 = sum(1 for r in ranks if r is not None and r <= 10)
@@ -195,7 +186,7 @@ def main(argv: list[str] | None = None) -> int:
     with engine.begin() as conn:
         run_id = conn.execute(
             RECORD_SQL,
-            {"commit": commit, "n": n, "config": json.dumps(config), 
+            {"commit": commit, "n": n, "config": json.dumps(config),
              "metrics": json.dumps(metrics)},
         ).scalar_one()
     print(f"recorded eval_runs id={run_id} at commit {commit[:10]}")

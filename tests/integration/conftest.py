@@ -58,7 +58,7 @@ def engine():
 def clean_db(engine):
     """Empty the document tables before a test that writes rows (test database only)."""
     with engine.begin() as conn:
-        conn.execute(text("TRUNCATE documents RESTART IDENTITY CASCADE"))
+        conn.execute(text("TRUNCATE users, documents RESTART IDENTITY CASCADE"))
         
 
 DOC_TEMPLATE = """\

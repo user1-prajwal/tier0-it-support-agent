@@ -20,3 +20,6 @@ class Settings(BaseSettings):
     embed_cache_dir: str = ".cache/fastembed"
     
     rerank_model: str = "Xenova/ms-marco-MiniLM-L-6-v2"
+    
+    # Only the seed script needs this. No default: a password must be chosen on purpose.
+    demo_password: SecretStr | None = None

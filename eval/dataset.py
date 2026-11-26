@@ -5,6 +5,8 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from app.db.demo_users import DEMO_USERS
+
 CATEGORIES = {
     "single_document",
     "multi_chunk",
@@ -16,14 +18,8 @@ CATEGORIES = {
     "tool_selection",
 }
 
-# TEMPORARY: the brief's seeded users, mapped to their groups. Phase 2 replaces this with
-# a lookup of the real seeded users in the database.
-SEEDED_USERS: dict[str, list[str]] = {
-    "alice@demo.local": ["everyone"],
-    "bob@demo.local": ["everyone", "helpdesk"],
-    "carol@demo.local": ["everyone", "security"],
-    "dave@demo.local": ["everyone", "hr"],
-}
+# Who may be named in asked_by: the active demo users. Their groups come from the database.
+KNOWN_ASKERS = {user.email for user in DEMO_USERS if user.is_active}
 
 # Never change these once questions exist: it would move questions between dev and test.
 SPLIT_SEED = "tier0-eval-v1"
@@ -96,8 +92,8 @@ def _parse_record(record: object) -> Question:
         raise QuestionError("id must be a non-empty string")
     if not isinstance(category, str) or category not in CATEGORIES:
         raise QuestionError(f"category must be one of {sorted(CATEGORIES)}")
-    if not isinstance(asked_by, str) or asked_by not in SEEDED_USERS:
-        raise QuestionError(f"asked_by must be one of {sorted(SEEDED_USERS)}")
+    if not isinstance(asked_by, str) or asked_by not in KNOWN_ASKERS:
+        raise QuestionError(f"asked_by must be one of {sorted(KNOWN_ASKERS)}")
     if not isinstance(text, str) or not text.strip():
         raise QuestionError("question must be a non-empty string")
     if not isinstance(answerable, bool):
@@ -120,7 +116,8 @@ def _parse_gold(gold: object) -> tuple[tuple[str, str], ...]:
             and all(isinstance(v, str) and v for v in item.values())
         )
         if not valid:
-            raise QuestionError
-            ('gold entries look like {"source_uri": "...", "heading_path": "..."}')        #above li
+            raise QuestionError(
+                'gold entries look like {"source_uri": "...", "heading_path": "..."}'
+            )
         sections.append((item["source_uri"], item["heading_path"]))
     return tuple(sections)

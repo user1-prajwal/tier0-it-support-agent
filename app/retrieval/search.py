@@ -122,6 +122,7 @@ class FusedHit:
     score: float  # the RRF score
     dense_rank: int | None  # position in the dense list, None if that arm did not return it
     fulltext_rank: int | None  # position in the full-text list, None if absent
+    rerank_score: float | None = None  # set by the reranker: a raw logit, larger is better
 
 
 def hybrid_search(

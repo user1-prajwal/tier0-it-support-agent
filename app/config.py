@@ -18,3 +18,5 @@ class Settings(BaseSettings):
     # Local embedding model. Downloaded once, then reused offline from the cache folder.
     embed_model: str = "BAAI/bge-small-en-v1.5"
     embed_cache_dir: str = ".cache/fastembed"
+    
+    rerank_model: str = "Xenova/ms-marco-MiniLM-L-6-v2"

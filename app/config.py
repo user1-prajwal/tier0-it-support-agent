@@ -23,3 +23,9 @@ class Settings(BaseSettings):
     
     # Only the seed script needs this. No default: a password must be chosen on purpose.
     demo_password: SecretStr | None = None
+    
+    # Signing key for access tokens. Checked at startup and before every use. See auth/tokens.py.
+    jwt_secret: SecretStr | None = None
+    access_token_minutes: int = 60
+    login_max_failures: int = 5
+    login_window_seconds: int = 300

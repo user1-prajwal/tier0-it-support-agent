@@ -23,6 +23,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://tier0:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/tier0
       LLM_PROVIDER: ${LLM_PROVIDER:-fake}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
     ports:
       - "127.0.0.1:8000:8000"
 

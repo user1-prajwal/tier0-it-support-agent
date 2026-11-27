@@ -27,6 +27,9 @@ eval:
 seed:
 	python -m app.db.seed
 
+leakage:
+	python -m eval.run_leakage
+
 
 # .PHONY: up down lint test
 

@@ -108,7 +108,10 @@ def fulltext_search(
         rows = conn.execute(FULLTEXT_SQL, params).all()
     return [FullTextHit(**row._mapping) for row in rows]
 
+
 # --- Hybrid search --------------------------------------------------------------------
+
+PER_ARM = 30
 
 
 @dataclass(frozen=True)
@@ -131,7 +134,7 @@ def hybrid_search(
     question: str,
     group_ids: Sequence[int],
     *,
-    per_arm: int = 30,
+    per_arm: int = PER_ARM,
     limit: int = 20,
 ) -> list[FusedHit]:
     """Both arms apply the permission filter in their own SQL. Fusion only merges what they

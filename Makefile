@@ -30,6 +30,9 @@ seed:
 leakage:
 	python -m eval.run_leakage
 
+ablation:
+	python -m eval.run_ablation $(ARGS)
+
 
 # .PHONY: up down lint test
 

@@ -247,6 +247,7 @@ def render_doc(config: dict, metrics: dict, run_id: int, commit: str) -> str:
         f"- {config['llm_drafted_questions']} of the {config['n_questions_total']} questions "
         "are marked `llm_drafted`: first drafted by an LLM, then reviewed and edited by the "
         "author.",
+        "- The corpus documents were first drafted with an LLM and then edited by the author.",
         "- Gold labels are sections (document plus heading path). A hit means some chunk of the "
         f"gold section was retrieved. {config['gold_sections_split']} of the "
         f"{config['gold_sections']} gold sections span more than one chunk; for those, a hit "
